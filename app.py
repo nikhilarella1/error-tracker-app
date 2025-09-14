@@ -5,10 +5,10 @@ from docx import Document
 import requests
 import base64
 
-# GitHub repo details from secrets
-GITHUB_TOKEN = st.secrets["GITHUB_TOKEN"]
-GITHUB_REPO = st.secrets["GITHUB_REPO"]
-GITHUB_FILE = st.secrets["GITHUB_FILE"]
+# --- GitHub repo details from environment variables ---
+GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN")
+GITHUB_REPO = os.environ.get("GITHUB_REPO")
+GITHUB_FILE = os.environ.get("GITHUB_FILE")
 
 # GitHub API base URL
 GITHUB_API = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{GITHUB_FILE}"
@@ -22,6 +22,7 @@ def load_error_db():
         data = base64.b64decode(content["content"]).decode("utf-8")
         return json.loads(data), content["sha"]
     else:
+        # If file doesn't exist, return empty dict
         return {}, None
 
 # --- Function: Save file to GitHub ---
@@ -47,17 +48,35 @@ def save_error_db(data, sha=None):
 # --- Load DB at startup ---
 error_db, file_sha = load_error_db()
 
+# --- Store uploaded files in JSON every run ---
+LOCAL_JSON_FILE = "error_data_local.json"
+if os.path.exists(LOCAL_JSON_FILE):
+    with open(LOCAL_JSON_FILE, "r", encoding="utf-8") as f:
+        local_db = json.load(f)
+else:
+    local_db = {}
+
+# Merge GitHub DB with local DB
+error_db.update(local_db)
+
 # --- File uploader ---
 uploaded_files = st.file_uploader("Upload Word Documents", type=["docx"], accept_multiple_files=True)
 
 if uploaded_files:
     for uploaded_file in uploaded_files:
         doc = Document(uploaded_file)
+        # Use first paragraph as title
+        title = doc.paragraphs[0].text.strip() if doc.paragraphs else uploaded_file.name
         content = "\n".join([para.text for para in doc.paragraphs if para.text.strip()])
-        title = doc.paragraphs[0].text.strip()
         error_db[title] = content
 
+    # Save to GitHub
     save_error_db(error_db, file_sha)
+    
+    # Also save locally every run
+    with open(LOCAL_JSON_FILE, "w", encoding="utf-8") as f:
+        json.dump(error_db, f, ensure_ascii=False, indent=4)
+    st.success("✅ Data stored locally and on GitHub!")
 
 # --- Search ---
 search_title = st.text_input("Enter the error title to search")

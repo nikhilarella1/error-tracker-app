@@ -5,3 +5,6 @@ python-docx
 tiktoken
 faiss-cpu
 python-dotenv
+requests
+
+
