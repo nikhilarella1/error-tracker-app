@@ -26,24 +26,30 @@ def load_error_db():
         return {}, None
 
 # --- Function: Save file to GitHub ---
-def save_error_db(data, sha=None):
+def save_error_db(error_db, file_sha=None):
+    url = f"https://api.github.com/repos/{GITHUB_REPO}/contents/{GITHUB_FILE}"
     headers = {"Authorization": f"token {GITHUB_TOKEN}"}
-    message = "Update error_data.json from Streamlit app"
-    content = base64.b64encode(json.dumps(data, ensure_ascii=False, indent=4).encode("utf-8")).decode("utf-8")
 
-    payload = {
-        "message": message,
-        "content": content,
-        "branch": "main"
+    content = base64.b64encode(json.dumps(error_db, indent=2).encode()).decode()
+
+    data = {
+        "message": "Update error DB",
+        "content": content
     }
-    if sha:
-        payload["sha"] = sha
+    if file_sha:  # only include if updating an existing file
+        data["sha"] = file_sha
 
-    res = requests.put(GITHUB_API, headers=headers, json=payload)
-    if res.status_code not in [200, 201]:
-        st.error(f"❌ Failed to save data: {res.json()}")
+    res = requests.put(url, headers=headers, json=data)
+
+    if res.status_code in (200, 201):
+        st.success("✅ Error DB saved successfully!")
     else:
-        st.success("✅ Data saved to GitHub permanently!")
+        try:
+            error_json = res.json()   # if valid JSON
+            st.error(f"❌ Failed to save data: {error_json}")
+        except ValueError:
+            st.error(f"❌ Failed to save data: {res.status_code} - {res.text}")
+
 
 # --- Load DB at startup ---
 error_db, file_sha = load_error_db()
